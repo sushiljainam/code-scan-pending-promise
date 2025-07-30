@@ -150,7 +150,14 @@ const cases = {
   ],
 };
 ruleTester.run('promise-constructor-exactly-one-callback', rule, {
-  valid: [cases.valid[1]],
+  valid: [
+    // cases.valid[0],
+    // cases.valid[1],
+    // cases.valid[2],
+    // cases.valid[3],
+    // cases.valid[4],
+    cases.valid[5],
+  ],
   invalid: [],
 });
 

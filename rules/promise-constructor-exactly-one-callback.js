@@ -106,7 +106,7 @@ module.exports = {
           const tryPaths = analyzeTryStatement(stmt, currentPath);
           // TODO: what about try/catch/finally block terminating or not-terminating?
           paths.push(...tryPaths);
-          currentPath = [...currentPath, stmt];
+          // currentPath = [...currentPath, stmt];
         } else if (stmt.type === 'SwitchStatement') {
           const switchPaths = analyzeSwitchStatement(stmt, currentPath);
           paths.push(...switchPaths);

@@ -103,17 +103,6 @@ const cases = {
         });
       `,
     },
-    // Valid: Return in if only, callback after
-    {
-      code: `
-        new Promise((resolve, reject) => {
-          if (shouldReturn) {
-            return;
-          }
-          resolve('success');
-        });
-      `,
-    },
     // Valid: Return in else only, callback after
     {
       code: `
@@ -283,6 +272,20 @@ const cases = {
       `,
       errors: [{
         messageId: 'multipleCallbacks',
+      }],
+    },
+    // Invalid: Return in if only, callback after
+    {
+      code: `
+        new Promise((resolve, reject) => {
+          if (shouldReturn) {
+            return;
+          }
+          resolve('success');
+        });
+      `,
+      errors: [{
+        messageId: 'noCallback',
       }],
     },
     // Invalid: resolve then return on new line, then another callback
@@ -500,28 +503,28 @@ const cases = {
 };
 
 ruleTester.run('promise-constructor-exactly-one-callback', rule, {
-  // valid: [
-  //   // cases.valid[0],
-  //   // cases.valid[1],
-  //   // cases.valid[2],
-  //   // cases.valid[3],
-  //   // cases.valid[4],
-  //   // cases.valid[5],
-  //   // cases.valid[6],
-  //   // cases.valid[7],
-  //   cases.valid[8],
-  //   // cases.valid[9],
-  // ],
-  // invalid: [
-  //   // cases.invalid[0],
-  //   // cases.invalid[1],
-  //   // cases.invalid[2],
-  //   // cases.invalid[3],
-  //   // cases.invalid[4],
-  //   // cases.invalid[5],
-  // ],
-  valid: cases.valid,
-  invalid: cases.invalid,
+  valid: [
+    // cases.valid[0],
+    // cases.valid[1],
+    // cases.valid[2],
+    // cases.valid[3],
+    // cases.valid[4],
+    // cases.valid[5],
+    // cases.valid[6],
+    // cases.valid[7],
+    cases.valid[8],
+    // cases.valid[9],
+  ],
+  invalid: [
+    // cases.invalid[0],
+    // cases.invalid[1],
+    // cases.invalid[2],
+    // cases.invalid[3],
+    // cases.invalid[4],
+    // cases.invalid[5],
+  ],
+  // valid: cases.valid,
+  // invalid: cases.invalid,
 });
 
 console.log('All rule tests passed!');

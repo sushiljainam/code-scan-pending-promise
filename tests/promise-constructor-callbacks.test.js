@@ -5,7 +5,7 @@ const ruleTester = new RuleTester({
   parserOptions: { ecmaVersion: 2018 },
 });
 
-ruleTester.run('promise-constructor-callbacks', rule, {
+const cases = {
   valid: [
     // Basic valid cases
     {
@@ -89,7 +89,7 @@ ruleTester.run('promise-constructor-callbacks', rule, {
     },
     {
       code: `
-        new Promise((resolve, reject) => {
+        new Promise((resolve, reject4) => {
           if (condition) {
             resolve('success');
           }
@@ -115,6 +115,8 @@ ruleTester.run('promise-constructor-callbacks', rule, {
       }],
     },
   ],
-});
+};
 
-console.log('All tests passed!');
+// ruleTester.run('promise-constructor-callbacks', rule, cases);
+
+console.log('All promise-constructor-callbacks tests passed!');

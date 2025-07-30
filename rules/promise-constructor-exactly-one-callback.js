@@ -56,7 +56,7 @@ module.exports = {
       for (const path of paths) {
         const callbackCount = countCallbacksInPath(path, resolveParam, rejectParam);
         console.debug('callbackCount', callbackCount);
-        
+
         if (callbackCount === 0) {
           issues.push({
             node: path.endNode || callbackBody,
@@ -85,6 +85,7 @@ module.exports = {
       const paths = [];
       let currentPath = [];
       
+      console.log('statements.length', statements.length);
       for (let i = 0; i < statements.length; i++) {
         const stmt = statements[i];
         
@@ -100,7 +101,7 @@ module.exports = {
           }
           
           // Continue with statements after if
-          currentPath = [...currentPath, stmt];
+          // currentPath = [...currentPath, stmt];
         } else if (stmt.type === 'TryStatement') {
           const tryPaths = analyzeTryStatement(stmt, currentPath);
           // TODO: what about try/catch/finally block terminating or not-terminating?

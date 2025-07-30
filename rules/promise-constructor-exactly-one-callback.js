@@ -46,23 +46,23 @@ module.exports = {
       };
     }
 
-    function analyzeExecutionPaths(node, resolveParam, rejectParam) {
+    function analyzeExecutionPaths(callbackBody, resolveParam, rejectParam) {
       const issues = [];
       
       // Analyze all possible execution paths
-      const paths = findAllExecutionPaths(node);
+      const paths = findAllExecutionPaths(callbackBody);
       
       for (const path of paths) {
         const callbackCount = countCallbacksInPath(path, resolveParam, rejectParam);
         
         if (callbackCount === 0) {
           issues.push({
-            node: path.endNode || node,
+            node: path.endNode || callbackBody,
             messageId: 'noCallback',
           });
         } else if (callbackCount > 1) {
           issues.push({
-            node: path.endNode || node,
+            node: path.endNode || callbackBody,
             messageId: 'multipleCallbacks',
           });
         }
@@ -71,12 +71,12 @@ module.exports = {
       return issues;
     }
 
-    function findAllExecutionPaths(node) {
-      if (node.type !== 'BlockStatement') {
-        return [{ statements: [node], endNode: node }];
+    function findAllExecutionPaths(callbackBody) {
+      if (callbackBody.type !== 'BlockStatement') {
+        return [{ statements: [callbackBody], endNode: callbackBody }];
       }
 
-      return analyzeBlock(node.body);
+      return analyzeBlock(callbackBody.body);
     }
 
     function analyzeBlock(statements) {
@@ -101,6 +101,7 @@ module.exports = {
           currentPath = [...currentPath, stmt];
         } else if (stmt.type === 'TryStatement') {
           const tryPaths = analyzeTryStatement(stmt, currentPath);
+          // TODO: what about try/catch/finally block terminating or not-terminating?
           paths.push(...tryPaths);
           currentPath = [...currentPath, stmt];
         } else if (stmt.type === 'SwitchStatement') {
@@ -261,7 +262,8 @@ module.exports = {
         const catchStatements = tryStmt.handler.body.body;
         const catchPaths = analyzeBlock([...currentPath, ...catchStatements]);
         paths.push(...catchPaths);
-      }
+      } // TODO: handler present handled, not present?
+      // TODO: what about optional finally block?
       
       paths.push(...tryPaths);
       return paths;

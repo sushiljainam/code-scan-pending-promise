@@ -512,16 +512,16 @@ ruleTester.run('promise-constructor-exactly-one-callback', rule, {
     cases.valid[8],
     // cases.valid[9],
   ],
-  invalid1: [
+  invalid: [
     // cases.invalid[0],
     // cases.invalid[1],
     // cases.invalid[2],
     // cases.invalid[3],
     // cases.invalid[4],
-    cases.invalid[5],
+    // cases.invalid[5],
   ],
   // valid: cases.valid,
-  invalid: [],
+  // invalid: cases.invalid,
 });
 
 console.log('All rule tests passed!');

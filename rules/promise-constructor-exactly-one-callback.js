@@ -55,7 +55,7 @@ module.exports = {
       
       for (const path of paths) {
         const callbackCount = countCallbacksInPath(path, resolveParam, rejectParam);
-        console.debug('callbackCount', callbackCount);
+        console.debug('callbackCount', callbackCount, 'terminated:', path.terminated);
 
         if (callbackCount === 0) {
           issues.push({
@@ -75,15 +75,15 @@ module.exports = {
 
     function findAllExecutionPaths(callbackBody) {
       if (callbackBody.type !== 'BlockStatement') {
-        return [{ statements: [callbackBody], endNode: callbackBody }];
+        return [{ statements: [callbackBody], endNode: callbackBody, terminated: 'no' }];
       }
 
       return analyzeBlock(callbackBody.body);
     }
 
-    function analyzeBlock(statements) {
+    function analyzeBlock(statements, currentPath = []) {
       const paths = [];
-      let currentPath = [];
+      let workingPath = [...currentPath];
       
       console.log('statements.length', statements.length);
       for (let i = 0; i < statements.length; i++) {
@@ -91,137 +91,117 @@ module.exports = {
         
         // Handle control flow statements
         if (stmt.type === 'IfStatement') {
-          const ifPaths = analyzeIfStatement(stmt, currentPath);
-          paths.push(...ifPaths);
+          const ifPaths = analyzeIfStatement(stmt, workingPath);
           
-          // If both branches return/throw, no continuation
-          const allBranchesTerminate = ifPathsTerminate(stmt);
-          if (allBranchesTerminate) {
-            return paths;
+          // Find remaining statements after the if block
+          const remainingStatements = statements.slice(i + 1);
+
+          // Continue execution only for non-terminated paths
+          const continuingPaths = [];
+          for (const path of ifPaths) {
+            if (path.terminated === 'no' && remainingStatements.length > 0) {
+              // Continue with remaining statements for non-terminated paths
+              const continuedPaths = analyzeBlock(remainingStatements, path.statements);
+              continuingPaths.push(...continuedPaths);
+            } else {
+              // Terminated paths or no remaining statements
+              continuingPaths.push(path);
+            }
           }
           
-          // Continue with statements after if
-          // currentPath = [...currentPath, stmt];
+          paths.push(...continuingPaths);
+          return paths; // We've handled all remaining statements
+
         } else if (stmt.type === 'TryStatement') {
-          const tryPaths = analyzeTryStatement(stmt, currentPath);
-          // TODO: what about try/catch/finally block terminating or not-terminating?
-          paths.push(...tryPaths);
-          // currentPath = [...currentPath, stmt];
-        } else if (stmt.type === 'SwitchStatement') {
-          const switchPaths = analyzeSwitchStatement(stmt, currentPath);
-          paths.push(...switchPaths);
+          const tryPaths = analyzeTryStatement(stmt, workingPath);
           
-          // If all cases have return/break, no continuation
-          const allCasesTerminate = switchCasesTerminate(stmt);
-          if (allCasesTerminate) {
-            return paths;
+          // Find remaining statements after try block
+          const remainingStatements = statements.slice(i + 1);
+          
+          const continuingPaths = [];
+          for (const path of tryPaths) {
+            if (path.terminated === 'no' && remainingStatements.length > 0) {
+              const continuedPaths = analyzeBlock(remainingStatements, path.statements);
+              continuingPaths.push(...continuedPaths);
+            } else {
+              continuingPaths.push(path);
+            }
           }
-          
-          currentPath = [...currentPath, stmt];
+
+          paths.push(...continuingPaths);
+          return paths;
+
+        } else if (stmt.type === 'SwitchStatement') {
+          const switchPaths = analyzeSwitchStatement(stmt, workingPath);
+
+          const remainingStatements = statements.slice(i + 1);
+
+          const continuingPaths = [];
+          for (const path of switchPaths) {
+            if (path.terminated === 'no' && remainingStatements.length > 0) {
+              const continuedPaths = analyzeBlock(remainingStatements, path.statements);
+              continuingPaths.push(...continuedPaths);
+            } else {
+              continuingPaths.push(path);
+            }
+          }
+
+          paths.push(...continuingPaths);
+          return paths;
+
         } else if (stmt.type === 'ForStatement' || stmt.type === 'WhileStatement' || stmt.type === 'DoWhileStatement') {
-          const loopPaths = analyzeLoopStatement(stmt, currentPath);
-          paths.push(...loopPaths);
-          currentPath = [...currentPath, stmt];
-        } else if (stmt.type === 'ReturnStatement' || stmt.type === 'ThrowStatement') {
-          // Path terminates here
+          const loopPaths = analyzeLoopStatement(stmt, workingPath);
+
+          const remainingStatements = statements.slice(i + 1);
+
+          const continuingPaths = [];
+          for (const path of loopPaths) {
+            if (path.terminated === 'no' && remainingStatements.length > 0) {
+              const continuedPaths = analyzeBlock(remainingStatements, path.statements);
+              continuingPaths.push(...continuedPaths);
+            } else {
+              continuingPaths.push(path);
+            }
+          }
+
+          paths.push(...continuingPaths);
+          return paths;
+
+        } else if (stmt.type === 'ReturnStatement') {
+          // Path terminates here with return
+          workingPath.push(stmt);
           paths.push({
-            statements: [...currentPath, stmt],
+            statements: workingPath,
             endNode: stmt,
-            terminates: true
+            terminated: 'yes'
           });
-          return paths; // No statements after return/throw are reachable
-        } else {
-          currentPath.push(stmt);
-        }
-      }
-      
-      // Add the main path if it doesn't terminate
-      if (currentPath.length > 0) {
-        paths.push({
-          statements: currentPath,
-          endNode: currentPath[currentPath.length - 1]
-        });
-      }
-      
-      return paths;
-    }
+          return paths; // No statements after return are reachable
 
-    function analyzeSwitchStatement(switchStmt, currentPath) {
-      const paths = [];
-      const cases = switchStmt.cases;
-      let hasDefault = false;
-      
-      for (const caseNode of cases) {
-        if (caseNode.test === null) { // default case
-          hasDefault = true;
-        }
-        
-        const caseStatements = caseNode.consequent;
-        if (caseStatements.length > 0) {
-          const casePaths = analyzeBlock([...currentPath, ...caseStatements]);
-          paths.push(...casePaths);
-        } else {
-          // Empty case - fallthrough or missing implementation
+        } else if (stmt.type === 'ThrowStatement') {
+          // Path terminates here with throw
+          workingPath.push(stmt);
           paths.push({
-            statements: currentPath,
-            endNode: caseNode,
-            isEmpty: true
+            statements: workingPath,
+            endNode: stmt,
+            terminated: 'thrown'
           });
+          return paths; // No statements after throw are reachable
+
+        } else {
+          workingPath.push(stmt);
         }
       }
-      
-      // If no default case, there's an implicit path that does nothing
-      if (!hasDefault) {
+
+      // Add the main path if it doesn't terminate
+      if (workingPath.length > 0) {
         paths.push({
-          statements: currentPath,
-          endNode: switchStmt,
-          isImplicitDefault: true
+          statements: workingPath,
+          endNode: workingPath[workingPath.length - 1],
+          terminated: 'no'
         });
       }
       
       return paths;
-    }
-
-    function analyzeLoopStatement(loopStmt, currentPath) {
-      const paths = [];
-      
-      // Analyze loop body
-      const bodyStatements = loopStmt.body.type === 'BlockStatement' 
-        ? loopStmt.body.body 
-        : [loopStmt.body];
-      
-      // Loop body paths (may execute 0 or more times)
-      const bodyPaths = analyzeBlock([...currentPath, ...bodyStatements]);
-      paths.push(...bodyPaths);
-      
-      // Path where loop doesn't execute or exits normally
-      paths.push({
-        statements: currentPath,
-        endNode: loopStmt,
-        isLoopSkip: true
-      });
-      
-      return paths;
-    }
-
-    function switchCasesTerminate(switchStmt) {
-      const cases = switchStmt.cases;
-      let hasDefault = false;
-      
-      for (const caseNode of cases) {
-        if (caseNode.test === null) hasDefault = true;
-        
-        // Check if this case terminates
-        const caseTerminates = caseNode.consequent.some(stmt => 
-          stmt.type === 'ReturnStatement' || 
-          stmt.type === 'ThrowStatement' ||
-          stmt.type === 'BreakStatement'
-        );
-        
-        if (!caseTerminates) return false;
-      }
-      
-      return hasDefault; // All cases terminate only if we also have default
     }
 
     function analyzeIfStatement(ifStmt, currentPath) {
@@ -231,7 +211,7 @@ module.exports = {
       const thenStatements = ifStmt.consequent.type === 'BlockStatement' 
         ? ifStmt.consequent.body 
         : [ifStmt.consequent];
-      const thenPaths = analyzeBlock([...currentPath, ...thenStatements]);
+      const thenPaths = analyzeBlock(thenStatements, [...currentPath]);
       
       // Analyze else branch (or create empty else path)
       let elsePaths;
@@ -239,12 +219,13 @@ module.exports = {
         const elseStatements = ifStmt.alternate.type === 'BlockStatement'
           ? ifStmt.alternate.body
           : [ifStmt.alternate];
-        elsePaths = analyzeBlock([...currentPath, ...elseStatements]);
+        elsePaths = analyzeBlock(elseStatements, [...currentPath]);
       } else {
         // No else branch = empty path that continues after if
         elsePaths = [{
-          statements: currentPath,
+          statements: [...currentPath],
           endNode: ifStmt,
+          terminated: 'no',
           continuesAfterIf: true
         }];
       }
@@ -258,39 +239,100 @@ module.exports = {
       
       // Analyze try block
       const tryStatements = tryStmt.block.body;
-      const tryPaths = analyzeBlock([...currentPath, ...tryStatements]);
+      const tryPaths = analyzeBlock(tryStatements, [...currentPath]);
       
-      // Analyze catch block
+      // Analyze catch block if present
       if (tryStmt.handler) {
         const catchStatements = tryStmt.handler.body.body;
-        const catchPaths = analyzeBlock([...currentPath, ...catchStatements]);
+        const catchPaths = analyzeBlock(catchStatements, [...currentPath]);
         paths.push(...catchPaths);
-      } // TODO: handler present handled, not present?
-      // TODO: what about optional finally block?
-      
-      paths.push(...tryPaths);
+      }
+
+      // Analyze finally block if present
+      if (tryStmt.finalizer) {
+        const finallyStatements = tryStmt.finalizer.body;
+        // Finally block runs after both try and catch, so we need to handle this carefully
+        const modifiedTryPaths = [];
+
+        for (const tryPath of tryPaths) {
+          if (tryPath.terminated === 'no') {
+            // Continue with finally block
+            const finallyPaths = analyzeBlock(finallyStatements, tryPath.statements);
+            modifiedTryPaths.push(...finallyPaths);
+          } else {
+            // Try path terminated, but finally still runs
+            const finallyPaths = analyzeBlock(finallyStatements, tryPath.statements);
+            modifiedTryPaths.push(...finallyPaths);
+          }
+        }
+
+        paths.push(...modifiedTryPaths);
+      } else {
+        paths.push(...tryPaths);
+      }
+
       return paths;
     }
 
-    function ifPathsTerminate(ifStmt) {
-      const thenTerminates = pathTerminates(ifStmt.consequent);
-      const elseTerminates = ifStmt.alternate ? pathTerminates(ifStmt.alternate) : false;
+    function analyzeSwitchStatement(switchStmt, currentPath) {
+      const paths = [];
+      const cases = switchStmt.cases;
+      let hasDefault = false;
       
-      return thenTerminates && elseTerminates;
+      for (const caseNode of cases) {
+        if (caseNode.test === null) { // default case
+          hasDefault = true;
+        }
+
+        const caseStatements = caseNode.consequent;
+        if (caseStatements.length > 0) {
+          const casePaths = analyzeBlock(caseStatements, [...currentPath]);
+          paths.push(...casePaths);
+        } else {
+          // Empty case - fallthrough or missing implementation
+          paths.push({
+            statements: [...currentPath],
+            endNode: caseNode,
+            terminated: 'no',
+            isEmpty: true
+          });
+        }
+      }
+      
+      // If no default case, there's an implicit path that does nothing
+      if (!hasDefault) {
+        paths.push({
+          statements: [...currentPath],
+          endNode: switchStmt,
+          terminated: 'no',
+          isImplicitDefault: true
+        });
+      }
+      
+      return paths;
     }
 
-    function pathTerminates(node) {
-      if (!node) return false;
+    function analyzeLoopStatement(loopStmt, currentPath) {
+      const paths = [];
+
+      // Analyze loop body
+      const bodyStatements = loopStmt.body.type === 'BlockStatement'
+        ? loopStmt.body.body
+        : [loopStmt.body];
+
+      // Loop body paths (may execute 0 or more times)
+      const bodyPaths = analyzeBlock(bodyStatements, [...currentPath]);
+      paths.push(...bodyPaths);
+
+      // Path where loop doesn't execute or exits normally
+      paths.push({
+        statements: [...currentPath],
+        endNode: loopStmt,
+        terminated: 'no',
+        isLoopSkip: true
+      });
       
-      if (node.type === 'ReturnStatement' || node.type === 'ThrowStatement') {
-        return true;
-      }
-      
-      if (node.type === 'BlockStatement') {
-        return node.body.some(stmt => pathTerminates(stmt));
-      }
-      
-      return false;
+      return paths;
     }
 
     function countCallbacksInPath(path, resolveParam, rejectParam) {

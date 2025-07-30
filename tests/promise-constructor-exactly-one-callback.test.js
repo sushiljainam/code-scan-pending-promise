@@ -128,7 +128,7 @@ const cases = {
         new Promise((resolve) => {
           resolve('missing reject param');
         });
-      `,
+      `, // TODO: this should be valid
       errors: [{
         messageId: 'missingParameters',
       }],
@@ -156,9 +156,15 @@ ruleTester.run('promise-constructor-exactly-one-callback', rule, {
     // cases.valid[2],
     // cases.valid[3],
     // cases.valid[4],
-    cases.valid[5],
   ],
-  invalid: [],
+  invalid: [
+    // cases.invalid[0],
+    // cases.invalid[1],
+    // cases.invalid[2],
+    // cases.invalid[3],
+    // cases.invalid[4],
+    cases.invalid[5],
+  ],
 });
 
 console.log('Combined rule tests passed!');

@@ -1,0 +1,30 @@
+{
+  "name": "eslint-plugin-promise-rules",
+  "version": "1.0.0",
+  "description": "Custom ESLint rules for Promise constructor validation",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "test:examples": "cd test-project && npm run lint",
+    "publish:local": "npm pack && npm install -g eslint-plugin-promise-rules-1.0.0.tgz"
+  },
+  "keywords": ["eslint", "promise", "rules", "javascript"],
+  "author": "Your Name",
+  "license": "MIT",
+  "peerDependencies": {
+    "eslint": ">=7.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "@types/eslint": "^8.56.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "files": [
+    "index.js",
+    "rules/",
+    "README.md"
+  ]
+}

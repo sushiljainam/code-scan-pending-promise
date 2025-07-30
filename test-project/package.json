@@ -1,0 +1,16 @@
+
+{
+  "name": "eslint-test-project",
+  "version": "1.0.0",
+  "description": "Test project for custom ESLint rules",
+  "main": "index.js",
+  "scripts": {
+    "lint": "eslint . --ext .js",
+    "lint:fix": "eslint . --ext .js --fix",
+    "test": "node good-examples.js && echo 'Good examples run successfully'"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "eslint-plugin-promise-rules": "file:../"
+  }
+}

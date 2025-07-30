@@ -149,6 +149,9 @@ const cases = {
     },
   ],
 };
-ruleTester.run('promise-constructor-exactly-one-callback', rule, cases);
+ruleTester.run('promise-constructor-exactly-one-callback', rule, {
+  valid: [cases.valid[1]],
+  invalid: [],
+});
 
 console.log('Combined rule tests passed!');

@@ -51,9 +51,11 @@ module.exports = {
       
       // Analyze all possible execution paths
       const paths = findAllExecutionPaths(callbackBody);
+      console.debug('paths.length', paths.length);
       
       for (const path of paths) {
         const callbackCount = countCallbacksInPath(path, resolveParam, rejectParam);
+        console.debug('callbackCount', callbackCount);
         
         if (callbackCount === 0) {
           issues.push({

@@ -515,8 +515,12 @@ ruleTester.run('promise-constructor-exactly-one-callback', rule, {
     // cases.valid[5],
     // cases.valid[6],
     // cases.valid[7],
-    cases.valid[8],
+    // cases.valid[8],
     // cases.valid[9],
+    // cases.valid[10],
+    // cases.valid[11],
+    // cases.valid[12],
+    cases.valid[13],
   ],
   invalid: [
     // cases.invalid[0],

@@ -89,72 +89,115 @@ module.exports = {
       
       if (targetCalls.length === 0) return false;
 
-      // Analyze all execution paths to ensure each path calls resolve or reject
-      return analyzeAllPaths(executorFn.body, targetCalls);
+      // Check if there's at least one execution path that doesn't call resolve/reject
+      const hasUncoveredPath = hasPathWithoutCallback(executorFn.body, targetCalls);
+      
+      // If there's an uncovered path, the Promise is invalid
+      return !hasUncoveredPath;
     }
 
-    function analyzeAllPaths(node, targetCalls) {
-      if (!node) return false;
+    function hasPathWithoutCallback(node, targetCalls) {
+      if (!node) return true; // Empty path = no callback called
 
-      // For a block statement, analyze the execution flow
       if (node.type === 'BlockStatement') {
-        return analyzeBlockStatement(node, targetCalls);
+        return analyzeBlock(node, targetCalls);
       }
 
-      // For other node types, check if they contain target calls
-      return containsTargetCall(node, targetCalls);
+      // For single statements, check if they guarantee a callback
+      return !guaranteesCallback(node, targetCalls);
     }
 
-    function analyzeBlockStatement(blockNode, targetCalls) {
+    function analyzeBlock(blockNode, targetCalls) {
       const statements = blockNode.body;
       
+      if (statements.length === 0) {
+        return true; // Empty block = no callback called
+      }
+
       for (let i = 0; i < statements.length; i++) {
         const stmt = statements[i];
         
-        // If we find a direct call to resolve/reject, this path is valid
-        if (containsTargetCall(stmt, targetCalls)) {
-          return true;
+        // If this statement guarantees a callback, no uncovered path from here
+        if (guaranteesCallback(stmt, targetCalls)) {
+          return false;
         }
         
-        // Handle control flow statements
+        // Handle control flow that might create uncovered paths
         if (stmt.type === 'IfStatement') {
-          const thenHasCall = analyzeAllPaths(stmt.consequent, targetCalls);
-          const elseHasCall = stmt.alternate ? 
-            analyzeAllPaths(stmt.alternate, targetCalls) : 
-            false; // No else branch means this path doesn't call resolve/reject
+          const thenHasUncovered = hasPathWithoutCallback(stmt.consequent, targetCalls);
+          const elseHasUncovered = stmt.alternate ? 
+            hasPathWithoutCallback(stmt.alternate, targetCalls) : 
+            true; // No else branch = uncovered path
           
-          // Both branches must have calls for the if statement to be valid
-          if (thenHasCall && elseHasCall) {
-            return true;
+          // If either branch has an uncovered path, there's a problem
+          if (thenHasUncovered || elseHasUncovered) {
+            // But continue checking the rest of the block - maybe there's a 
+            // callback after the if statement that covers all paths
+            continue;
+          } else {
+            // Both branches are covered, no uncovered path
+            return false;
           }
-          // If only one branch has a call, we need to continue checking
-          // the rest of the block to see if there's a fallback
         }
         
         if (stmt.type === 'TryStatement') {
-          const tryHasCall = analyzeAllPaths(stmt.block, targetCalls);
-          const catchHasCall = stmt.handler ? 
-            analyzeAllPaths(stmt.handler.body, targetCalls) : 
-            false;
+          const tryHasUncovered = hasPathWithoutCallback(stmt.block, targetCalls);
+          const catchHasUncovered = stmt.handler ? 
+            hasPathWithoutCallback(stmt.handler.body, targetCalls) : 
+            true; // No catch = uncovered error path
           
-          // Both try and catch should have calls
-          if (tryHasCall && catchHasCall) {
-            return true;
+          if (tryHasUncovered || catchHasUncovered) {
+            continue; // Keep checking rest of block
+          } else {
+            return false; // Both try and catch are covered
           }
         }
         
-        // Handle return statements - they end execution
-        if (stmt.type === 'ReturnStatement') {
-          return containsTargetCall(stmt, targetCalls);
-        }
-        
-        // Handle throw statements - they end execution
-        if (stmt.type === 'ThrowStatement') {
-          return false; // Throwing without calling resolve/reject is invalid
+        // Return and throw statements end execution
+        if (stmt.type === 'ReturnStatement' || stmt.type === 'ThrowStatement') {
+          // If we reach a return/throw without calling resolve/reject, that's an uncovered path
+          return !containsTargetCall(stmt, targetCalls);
         }
       }
       
-      // If we reach here, no statement in the block called resolve/reject
+      // If we get through all statements without finding a guaranteed callback,
+      // there's an uncovered path (the "fall-through" path)
+      return true;
+    }
+
+    function guaranteesCallback(node, targetCalls) {
+      if (!node) return false;
+      
+      // Direct callback call
+      if (containsTargetCall(node, targetCalls)) {
+        return true;
+      }
+      
+      // If statement guarantees callback only if both branches do
+      if (node.type === 'IfStatement') {
+        const thenGuarantees = guaranteesCallback(node.consequent, targetCalls);
+        const elseGuarantees = node.alternate ? 
+          guaranteesCallback(node.alternate, targetCalls) : 
+          false; // No else = doesn't guarantee
+        
+        return thenGuarantees && elseGuarantees;
+      }
+      
+      // Try statement guarantees callback if both try and catch do
+      if (node.type === 'TryStatement') {
+        const tryGuarantees = guaranteesCallback(node.block, targetCalls);
+        const catchGuarantees = node.handler ? 
+          guaranteesCallback(node.handler.body, targetCalls) : 
+          false;
+        
+        return tryGuarantees && catchGuarantees;
+      }
+      
+      // Block guarantees callback if any statement in it does
+      if (node.type === 'BlockStatement') {
+        return node.body.some(stmt => guaranteesCallback(stmt, targetCalls));
+      }
+      
       return false;
     }
 
@@ -174,7 +217,7 @@ module.exports = {
         return containsTargetCall(node.expression, targetCalls);
       }
       
-      // Recursively check child nodes
+      // Recursively check child nodes (but not into nested functions)
       for (const key in node) {
         if (key === 'parent' || key === 'range' || key === 'loc') continue;
         

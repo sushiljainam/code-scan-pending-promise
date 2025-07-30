@@ -89,13 +89,112 @@ module.exports = {
       
       if (targetCalls.length === 0) return false;
 
-      // Find all calls to resolve/reject in the function body
-      const foundCalls = findCallsInNode(executorFn.body, targetCalls);
+      // Analyze all execution paths to ensure each path calls resolve or reject
+      return analyzeAllPaths(executorFn.body, targetCalls);
+    }
+
+    function analyzeAllPaths(node, targetCalls) {
+      if (!node) return false;
+
+      // For a block statement, analyze the execution flow
+      if (node.type === 'BlockStatement') {
+        return analyzeBlockStatement(node, targetCalls);
+      }
+
+      // For other node types, check if they contain target calls
+      return containsTargetCall(node, targetCalls);
+    }
+
+    function analyzeBlockStatement(blockNode, targetCalls) {
+      const statements = blockNode.body;
       
-      // Simple check: if we found at least one resolve or reject call, consider it valid
-      // This is a basic implementation - a more sophisticated version would analyze
-      // all execution paths using ESLint's CodePath API
-      return foundCalls.size > 0;
+      for (let i = 0; i < statements.length; i++) {
+        const stmt = statements[i];
+        
+        // If we find a direct call to resolve/reject, this path is valid
+        if (containsTargetCall(stmt, targetCalls)) {
+          return true;
+        }
+        
+        // Handle control flow statements
+        if (stmt.type === 'IfStatement') {
+          const thenHasCall = analyzeAllPaths(stmt.consequent, targetCalls);
+          const elseHasCall = stmt.alternate ? 
+            analyzeAllPaths(stmt.alternate, targetCalls) : 
+            false; // No else branch means this path doesn't call resolve/reject
+          
+          // Both branches must have calls for the if statement to be valid
+          if (thenHasCall && elseHasCall) {
+            return true;
+          }
+          // If only one branch has a call, we need to continue checking
+          // the rest of the block to see if there's a fallback
+        }
+        
+        if (stmt.type === 'TryStatement') {
+          const tryHasCall = analyzeAllPaths(stmt.block, targetCalls);
+          const catchHasCall = stmt.handler ? 
+            analyzeAllPaths(stmt.handler.body, targetCalls) : 
+            false;
+          
+          // Both try and catch should have calls
+          if (tryHasCall && catchHasCall) {
+            return true;
+          }
+        }
+        
+        // Handle return statements - they end execution
+        if (stmt.type === 'ReturnStatement') {
+          return containsTargetCall(stmt, targetCalls);
+        }
+        
+        // Handle throw statements - they end execution
+        if (stmt.type === 'ThrowStatement') {
+          return false; // Throwing without calling resolve/reject is invalid
+        }
+      }
+      
+      // If we reach here, no statement in the block called resolve/reject
+      return false;
+    }
+
+    function containsTargetCall(node, targetCalls) {
+      if (!node) return false;
+      
+      // Direct call check
+      if (node.type === 'CallExpression' && 
+          node.callee && 
+          node.callee.type === 'Identifier' &&
+          targetCalls.includes(node.callee.name)) {
+        return true;
+      }
+      
+      // Expression statement wrapper
+      if (node.type === 'ExpressionStatement') {
+        return containsTargetCall(node.expression, targetCalls);
+      }
+      
+      // Recursively check child nodes
+      for (const key in node) {
+        if (key === 'parent' || key === 'range' || key === 'loc') continue;
+        
+        const child = node[key];
+        if (Array.isArray(child)) {
+          for (const item of child) {
+            if (item && typeof item === 'object' && item.type) {
+              if (containsTargetCall(item, targetCalls)) {
+                return true;
+              }
+            }
+          }
+        } else if (child && typeof child === 'object' && child.type) {
+          if (containsTargetCall(child, targetCalls)) {
+            return true;
+          }
+        }
+      }
+      
+      return false;
     }
 
     return {

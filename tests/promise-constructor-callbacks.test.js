@@ -93,7 +93,21 @@ ruleTester.run('promise-constructor-callbacks', rule, {
           if (condition) {
             resolve('success');
           }
-          // Missing else path
+          // Missing else path - this should fail
+        });
+      `,
+      errors: [{
+        messageId: 'noCallback',
+      }],
+    },
+    {
+      code: `
+        new Promise((resolve, reject) => {
+          const data = getData();
+          if (data.valid) {
+            resolve(data.value);
+          }
+          // What happens when data.valid is false? No callback called!
         });
       `,
       errors: [{

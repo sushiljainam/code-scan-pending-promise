@@ -103,18 +103,6 @@ const cases = {
         });
       `,
     },
-    // Valid: Return in else only, callback after
-    {
-      code: `
-        new Promise((resolve, reject) => {
-          if (condition) {
-            resolve('success');
-          } else {
-            return;
-          }
-        });
-      `,
-    },
     // Valid: Return in both if/else, no code after
     {
       code: `
@@ -282,6 +270,21 @@ const cases = {
             return;
           }
           resolve('success');
+        });
+      `,
+      errors: [{
+        messageId: 'noCallback',
+      }],
+    },
+    // Invalid: Return in else only, callback after
+    {
+      code: `
+        new Promise((resolve, reject) => {
+          if (condition) {
+            resolve('success');
+          } else {
+            return;
+          }
         });
       `,
       errors: [{
